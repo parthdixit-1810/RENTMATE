@@ -1,0 +1,80 @@
+body {
+  margin: 0;
+  font-family: 'Manrope', 'Inter', 'Roboto', Arial, sans-serif;
+  background: linear-gradient(120deg, #e0e7ff 0%, #f5f7fa 100%);
+  min-height: 100vh;
+  color: #222;
+  /* Glassmorphism effect */
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(90,110,200,0.07) 0, transparent 60%),
+    radial-gradient(circle at 80% 0%, rgba(90,110,200,0.07) 0, transparent 60%),
+    linear-gradient(120deg, #e0e7ff 0%, #f5f7fa 100%);
+  /* Subtle animated gradient */
+  animation: gradientMove 12s ease-in-out infinite alternate;
+}
+
+#floating-blob-bg {
+  position: fixed;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 0;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.MuiPaper-root, .MuiCard-root {
+  border: 1.5px solid rgba(108,99,255,0.10);
+  box-shadow: 0 8px 32px 0 rgba(30,34,90,0.13);
+  backdrop-filter: blur(12px);
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}
