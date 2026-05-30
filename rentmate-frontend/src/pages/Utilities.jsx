@@ -33,12 +33,6 @@ const CATEGORY_DOTS = {
   Other: '#4A5568',
 };
 
-const DEFAULT_BILLS = [
-  { id: 1, date: '2024-01-15', category: 'Electricity', amount: 2500, splitMethod: 'Equal', status: 'paid', description: 'January bill', recurring: true },
-  { id: 2, date: '2024-01-20', category: 'Water', amount: 800, splitMethod: 'Equal', status: 'pending', description: 'January bill', recurring: false },
-  { id: 3, date: '2024-01-10', category: 'Internet', amount: 1200, splitMethod: 'Equal', status: 'overdue', description: 'January bill', recurring: true },
-  { id: 4, date: '2024-01-25', category: 'Gas', amount: 600, splitMethod: 'Equal', status: 'pending', description: 'January bill', recurring: false },
-];
 
 const fmtINR = (v) => `₹${Number(v).toLocaleString('en-IN')}`;
 
@@ -58,13 +52,13 @@ function StatusBadge({ status }) {
 }
 
 export default function Utilities() {
-  const [bills, setBills] = useLocalStorage('rm_utility_bills', DEFAULT_BILLS);
+  const [bills, setBills] = useLocalStorage('rm_utility_bills', []);
   const [roommates] = useLocalStorage('rm_rent_roommates', []);
   const [openAdd, setOpenAdd] = useState(false);
   const [success, setSuccess] = useState('');
   const [form, setForm] = useState({
     category: 'Electricity', amount: '', splitMethod: 'Equal',
-    customPercents: {}, dueDate: '', description: '', recurring: false, file: null,
+    customPercents: {}, dueDate: '', description: '', recurring: false, file: null, filePreview: null,
   });
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState(null);
@@ -476,10 +470,35 @@ export default function Utilities() {
                 startIcon={<UploadIcon sx={{ fontSize: 14 }} />}
               >
                 Attach receipt
-                <input type="file" hidden accept="image/*,.pdf" onChange={e => setForm(f => ({ ...f, file: e.target.files[0] }))} />
+                <input
+                  type="file"
+                  hidden
+                  accept="image/*,.pdf"
+                  onChange={e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    setForm(f => ({ ...f, file }));
+                    if (file.type.startsWith('image/')) {
+                      const reader = new FileReader();
+                      reader.onload = ev => setForm(f => ({ ...f, filePreview: ev.target.result }));
+                      reader.readAsDataURL(file);
+                    } else {
+                      setForm(f => ({ ...f, filePreview: null }));
+                    }
+                  }}
+                />
               </Button>
               {form.file && (
                 <Typography sx={{ fontSize: '0.75rem', color: '#6B8C95' }}>{form.file.name}</Typography>
+              )}
+              {form.filePreview && (
+                <Box sx={{ mt: 1.5, width: '100%' }}>
+                  <img
+                    src={form.filePreview}
+                    alt="Receipt preview"
+                    style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 8, border: '1px solid #E8E0D5', objectFit: 'contain' }}
+                  />
+                </Box>
               )}
             </Box>
           </DialogContent>

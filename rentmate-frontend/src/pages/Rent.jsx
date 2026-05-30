@@ -13,11 +13,6 @@ import api from '../api';
 
 const postAuditLog = (entry) => api.post('/api/audit-logs', entry).catch(() => {});
 
-const DEFAULT_ROOMMATES = [
-  { id: 1, name: 'John Doe', share: 40, amount: 4800, status: 'paid', room: 'Master Bedroom' },
-  { id: 2, name: 'Jane Smith', share: 30, amount: 3600, status: 'unpaid', room: 'Bedroom 2' },
-  { id: 3, name: 'Mike Johnson', share: 30, amount: 3600, status: 'unpaid', room: 'Bedroom 3' },
-];
 
 const fmtINR = (v) => `₹${Number(v).toLocaleString('en-IN')}`;
 
@@ -34,7 +29,7 @@ function StatusBadge({ status }) {
 }
 
 export default function Rent() {
-  const [roommates, setRoommates] = useLocalStorage('rm_rent_roommates', DEFAULT_ROOMMATES);
+  const [roommates, setRoommates] = useLocalStorage('rm_rent_roommates', []);
   const [weightedSplit, setWeightedSplit] = useLocalStorage('rm_rent_weighted', true);
 
   const [openAddRent, setOpenAddRent] = useState(false);
