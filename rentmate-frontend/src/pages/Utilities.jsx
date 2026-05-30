@@ -4,11 +4,14 @@ import {
   TableContainer, TableHead, TableRow, Paper, Button,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   Select, MenuItem, FormControl, InputLabel, InputAdornment,
-  Snackbar, Alert, FormControlLabel, Checkbox, Tooltip
+  Snackbar, Alert, FormControlLabel, Checkbox, Tooltip, Chip,
+  IconButton, Divider
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import UploadIcon from '@mui/icons-material/Upload';
 import RepeatIcon from '@mui/icons-material/Repeat';
+import FlagIcon from '@mui/icons-material/Flag';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import PaymentModal from '../components/PaymentModal';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import api from '../api';
@@ -56,14 +59,20 @@ function StatusBadge({ status }) {
 
 export default function Utilities() {
   const [bills, setBills] = useLocalStorage('rm_utility_bills', DEFAULT_BILLS);
+  const [roommates] = useLocalStorage('rm_rent_roommates', []);
   const [openAdd, setOpenAdd] = useState(false);
   const [success, setSuccess] = useState('');
   const [form, setForm] = useState({
     category: 'Electricity', amount: '', splitMethod: 'Equal',
-    customPercent: '', dueDate: '', description: '', recurring: false, file: null,
+    customPercents: {}, dueDate: '', description: '', recurring: false, file: null,
   });
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState(null);
+
+  // Split view dialog state
+  const [splitDialogBill, setSplitDialogBill] = useState(null);
+  // Per-person paid status in split dialog (keyed by bill id + roommate index)
+  const [personPaid, setPersonPaid] = useLocalStorage('rm_split_person_paid', {});
 
   useEffect(() => {
     api.get('/api/utilities')
@@ -93,6 +102,28 @@ export default function Utilities() {
   const pendingBills = bills.filter(b => b.status === 'pending').reduce((s, b) => s + b.amount, 0);
   const overdueBills = bills.filter(b => b.status === 'overdue').reduce((s, b) => s + b.amount, 0);
 
+  const roommateList = Array.isArray(roommates) ? roommates : [];
+  const roommateCount = roommateList.length || 1;
+
+  // Initialize custom percents when roommates change or form opens
+  const initCustomPercents = useCallback(() => {
+    const equal = parseFloat((100 / roommateCount).toFixed(2));
+    const percents = {};
+    roommateList.forEach((rm, i) => {
+      percents[i] = equal;
+    });
+    if (roommateList.length === 0) percents[0] = 100;
+    return percents;
+  }, [roommateList, roommateCount]);
+
+  const handleOpenAdd = () => {
+    setForm(f => ({
+      ...f,
+      customPercents: initCustomPercents(),
+    }));
+    setOpenAdd(true);
+  };
+
   const handleAdd = async (e) => {
     e.preventDefault();
     const newBill = {
@@ -101,9 +132,11 @@ export default function Utilities() {
       category: form.category,
       amount: Number(form.amount),
       splitMethod: form.splitMethod,
+      customPercents: form.splitMethod === 'Custom' ? form.customPercents : null,
       status: 'pending',
       description: form.description,
       recurring: form.recurring,
+      disputed: false,
     };
     setBills(prev => [newBill, ...prev]);
     if (form.recurring) {
@@ -120,7 +153,7 @@ export default function Utilities() {
     } catch {}
     setOpenAdd(false);
     setSuccess(`${form.category} bill added.`);
-    setForm({ category: 'Electricity', amount: '', splitMethod: 'Equal', customPercent: '', dueDate: '', description: '', recurring: false, file: null });
+    setForm({ category: 'Electricity', amount: '', splitMethod: 'Equal', customPercents: {}, dueDate: '', description: '', recurring: false, file: null });
     postAuditLog({ entityType: 'UTILITY', action: 'BILL_ADDED', description: `${form.category} ₹${form.amount}`, newValue: `₹${form.amount}` });
   };
 
@@ -132,8 +165,61 @@ export default function Utilities() {
     if (bill) postAuditLog({ entityType: 'UTILITY', entityId: id, action: 'MARKED_PAID', description: `${bill.category} ₹${bill.amount} marked paid` });
   };
 
+  const handleDispute = (id) => {
+    setBills(prev => prev.map(b => b.id === id ? { ...b, disputed: true } : b));
+    setSuccess('Bill flagged as disputed.');
+    postAuditLog({ entityType: 'UTILITY', entityId: id, action: 'DISPUTED' });
+  };
+
+  const handlePersonPaid = (billId, idx) => {
+    const key = `${billId}_${idx}`;
+    setPersonPaid(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Compute split breakdown for a bill
+  const getSplitRows = (bill) => {
+    const count = roommateCount;
+    const names = roommateList.length > 0
+      ? roommateList.map(r => r.name || r)
+      : Array.from({ length: count }, (_, i) => `Roommate ${i + 1}`);
+
+    if (bill.splitMethod === 'Equal') {
+      const share = bill.amount / count;
+      return names.map((name, i) => ({
+        name,
+        percent: parseFloat((100 / count).toFixed(2)),
+        amount: share,
+        paid: !!personPaid[`${bill.id}_${i}`],
+        idx: i,
+      }));
+    }
+    if (bill.splitMethod === 'Custom' && bill.customPercents) {
+      return names.map((name, i) => {
+        const pct = parseFloat(bill.customPercents[i] || 0);
+        return {
+          name,
+          percent: pct,
+          amount: (bill.amount * pct) / 100,
+          paid: !!personPaid[`${bill.id}_${i}`],
+          idx: i,
+        };
+      });
+    }
+    // Weighted — equal fallback
+    const share = bill.amount / count;
+    return names.map((name, i) => ({
+      name,
+      percent: parseFloat((100 / count).toFixed(2)),
+      amount: share,
+      paid: !!personPaid[`${bill.id}_${i}`],
+      idx: i,
+    }));
+  };
+
+  const customPercentTotal = Object.values(form.customPercents).reduce((s, v) => s + parseFloat(v || 0), 0);
+
   return (
-    <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, }}>
+    <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
       {/* Hero Header */}
       <Box
         sx={{
@@ -156,7 +242,7 @@ export default function Utilities() {
           variant="contained"
           size="small"
           startIcon={<AddIcon sx={{ fontSize: 15 }} />}
-          onClick={() => setOpenAdd(true)}
+          onClick={handleOpenAdd}
           sx={{ position: 'relative' }}
         >
           Add bill
@@ -212,6 +298,9 @@ export default function Utilities() {
                           <RepeatIcon sx={{ fontSize: 13, color: '#6B8C95' }} />
                         </Tooltip>
                       )}
+                      {bill.disputed && (
+                        <Chip label="Disputed" size="small" sx={{ bgcolor: '#FEE2E2', color: '#B91C1C', fontWeight: 600, fontSize: '0.7rem', height: 20 }} />
+                      )}
                     </Box>
                   </TableCell>
                   <TableCell>
@@ -220,7 +309,16 @@ export default function Utilities() {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Typography sx={{ fontSize: '0.8125rem', color: '#4A5568' }}>{bill.splitMethod}</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Typography sx={{ fontSize: '0.8125rem', color: '#4A5568' }}>{bill.splitMethod}</Typography>
+                      {(bill.splitMethod === 'Equal' || bill.splitMethod === 'Custom') && (
+                        <Tooltip title="View split breakdown" arrow>
+                          <IconButton size="small" onClick={() => setSplitDialogBill(bill)} sx={{ p: 0.25 }}>
+                            <VisibilityIcon sx={{ fontSize: 14, color: '#14B8A6' }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={bill.status} />
@@ -229,16 +327,29 @@ export default function Utilities() {
                     <Typography sx={{ fontSize: '0.8125rem', color: '#6B8C95' }}>{bill.description || '—'}</Typography>
                   </TableCell>
                   <TableCell>
-                    {bill.status !== 'paid' && (
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => { setSelectedBill(bill); setPaymentModalOpen(true); }}
-                        sx={{ fontSize: '0.8125rem' }}
-                      >
-                        Mark paid
-                      </Button>
-                    )}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      {bill.status !== 'paid' && (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => { setSelectedBill(bill); setPaymentModalOpen(true); }}
+                          sx={{ fontSize: '0.8125rem' }}
+                        >
+                          Mark paid
+                        </Button>
+                      )}
+                      {!bill.disputed && (
+                        <Tooltip title="Flag as disputed" arrow>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDispute(bill.id)}
+                            sx={{ color: '#9CA3AF', '&:hover': { color: '#EF4444' } }}
+                          >
+                            <FlagIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -271,7 +382,18 @@ export default function Utilities() {
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
               <FormControl fullWidth>
                 <InputLabel>Split method</InputLabel>
-                <Select value={form.splitMethod} onChange={e => setForm(f => ({ ...f, splitMethod: e.target.value }))} label="Split method">
+                <Select
+                  value={form.splitMethod}
+                  onChange={e => {
+                    const sm = e.target.value;
+                    setForm(f => ({
+                      ...f,
+                      splitMethod: sm,
+                      customPercents: sm === 'Custom' ? initCustomPercents() : f.customPercents,
+                    }));
+                  }}
+                  label="Split method"
+                >
                   {SPLIT_METHODS.map(m => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
                 </Select>
               </FormControl>
@@ -284,18 +406,42 @@ export default function Utilities() {
                 onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
               />
             </Box>
+
+            {/* Custom percentage inputs per roommate */}
             {form.splitMethod === 'Custom' && (
-              <TextField
-                label="Your percentage"
-                type="number"
-                fullWidth
-                sx={{ mb: 2 }}
-                value={form.customPercent}
-                onChange={e => setForm(f => ({ ...f, customPercent: e.target.value }))}
-                InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
-                inputProps={{ min: 0, max: 100, step: 0.5 }}
-              />
+              <Box sx={{ mb: 2 }}>
+                <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: '#101827', mb: 1 }}>
+                  Custom split percentages
+                </Typography>
+                {(roommateList.length > 0 ? roommateList : [{ name: 'You' }]).map((rm, i) => (
+                  <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                    <Typography sx={{ fontSize: '0.875rem', color: '#4A5568', minWidth: 100 }}>
+                      {rm.name || rm || `Roommate ${i + 1}`}
+                    </Typography>
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={form.customPercents[i] ?? ''}
+                      onChange={e => setForm(f => ({
+                        ...f,
+                        customPercents: { ...f.customPercents, [i]: e.target.value },
+                      }))}
+                      InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
+                      inputProps={{ min: 0, max: 100, step: 0.5 }}
+                      sx={{ width: 120 }}
+                    />
+                  </Box>
+                ))}
+                <Typography sx={{
+                  fontSize: '0.8125rem',
+                  color: Math.abs(customPercentTotal - 100) < 0.1 ? '#14B8A6' : '#EF4444',
+                  fontWeight: 600, mt: 0.5,
+                }}>
+                  Total: {customPercentTotal.toFixed(1)}% {Math.abs(customPercentTotal - 100) < 0.1 ? '✓' : '(must equal 100%)'}
+                </Typography>
+              </Box>
             )}
+
             <TextField
               label="Description"
               fullWidth
@@ -342,6 +488,81 @@ export default function Utilities() {
             <Button type="submit" variant="contained">Add bill</Button>
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* Split Breakdown Dialog */}
+      <Dialog open={!!splitDialogBill} onClose={() => setSplitDialogBill(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Split Breakdown — {splitDialogBill?.category} {splitDialogBill && fmtINR(splitDialogBill.amount)}
+        </DialogTitle>
+        <DialogContent>
+          {splitDialogBill && (() => {
+            const rows = getSplitRows(splitDialogBill);
+            return (
+              <>
+                <Typography sx={{ fontSize: '0.8125rem', color: '#6B8C95', mb: 2 }}>
+                  Method: <strong>{splitDialogBill.splitMethod}</strong> &nbsp;|&nbsp; {rows.length} roommate{rows.length !== 1 ? 's' : ''}
+                </Typography>
+                <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #E5E7EB', borderRadius: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#F9FAFB' }}>
+                        <TableCell sx={{ fontWeight: 700, fontSize: '0.8125rem' }}>Roommate</TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: '0.8125rem' }}>Share %</TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: '0.8125rem' }}>Amount</TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: '0.8125rem' }}>Status</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell sx={{ fontSize: '0.875rem', fontWeight: 500 }}>{row.name}</TableCell>
+                          <TableCell sx={{ fontSize: '0.875rem', color: '#6B7280' }}>{row.percent.toFixed(1)}%</TableCell>
+                          <TableCell sx={{ fontSize: '0.875rem', fontWeight: 600 }}>{fmtINR(row.amount)}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Chip
+                                label={row.paid ? 'Paid' : 'Unpaid'}
+                                size="small"
+                                sx={{
+                                  bgcolor: row.paid ? '#D1FAE5' : '#FEF3C7',
+                                  color: row.paid ? '#065F46' : '#92400E',
+                                  fontWeight: 600,
+                                  fontSize: '0.75rem',
+                                  height: 22,
+                                }}
+                              />
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => handlePersonPaid(splitDialogBill.id, row.idx)}
+                                sx={{ fontSize: '0.75rem', minWidth: 0, px: 0.5, color: '#14B8A6' }}
+                              >
+                                {row.paid ? 'Undo' : 'Mark paid'}
+                              </Button>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                <Divider sx={{ my: 2 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 1 }}>
+                  <Typography sx={{ fontSize: '0.875rem', color: '#6B7280' }}>
+                    Paid: {rows.filter(r => r.paid).length} / {rows.length}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: '#101827' }}>
+                    Collected: {fmtINR(rows.filter(r => r.paid).reduce((s, r) => s + r.amount, 0))}
+                  </Typography>
+                </Box>
+              </>
+            );
+          })()}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSplitDialogBill(null)} variant="contained">Close</Button>
+        </DialogActions>
       </Dialog>
 
       <Snackbar open={!!success} autoHideDuration={3500} onClose={() => setSuccess('')}>

@@ -15,6 +15,10 @@ import FeaturesDemo from './pages/FeaturesDemo';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import OAuth2Callback from './pages/OAuth2Callback';
+import Reminders from './pages/Reminders';
+import Disputes from './pages/Disputes';
+import DepositCalculator from './pages/DepositCalculator';
+import AIAssistant from './pages/AIAssistant';
 
 function AuthenticatedApp({ onLogout }) {
   const theme = useTheme();
@@ -80,6 +84,10 @@ function AuthenticatedApp({ onLogout }) {
             element={<Notifications onMarkAllRead={markAllRead} />}
           />
           <Route path="/features-demo" element={<FeaturesDemo />} />
+          <Route path="/reminders" element={<Reminders />} />
+          <Route path="/disputes" element={<Disputes />} />
+          <Route path="/deposit" element={<DepositCalculator />} />
+          <Route path="/ai" element={<AIAssistant />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

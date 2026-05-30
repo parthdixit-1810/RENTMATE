@@ -10,6 +10,10 @@ import {
   Group as GroupIcon,
   History as HistoryIcon,
   Notifications as NotificationsIcon,
+  NotificationsActive as NotificationsActiveIcon,
+  Gavel as GavelIcon,
+  Calculate as CalculateIcon,
+  SmartToy as SmartToyIcon,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -22,6 +26,10 @@ const menuItems = [
   { text: 'Rooms', icon: <GroupIcon />, path: '/rooms' },
   { text: 'History', icon: <HistoryIcon />, path: '/history' },
   { text: 'Notifications', icon: <NotificationsIcon />, path: '/notifications' },
+  { text: 'Reminders', icon: <NotificationsActiveIcon />, path: '/reminders' },
+  { text: 'Disputes', icon: <GavelIcon />, path: '/disputes' },
+  { text: 'Deposit Calc', icon: <CalculateIcon />, path: '/deposit' },
+  { text: 'AI Assistant', icon: <SmartToyIcon />, path: '/ai' },
 ];
 
 function Sidebar({ open, isMobile = false, onClose }) {
