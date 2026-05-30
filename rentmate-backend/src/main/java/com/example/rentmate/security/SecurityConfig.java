@@ -15,10 +15,15 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 public class SecurityConfig {
+
+    @Value("${FRONTEND_URL:http://localhost:5173}")
+    private String frontendUrl;
 
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -80,7 +85,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:*"));
+        List<String> origins = new ArrayList<>(List.of("http://localhost:*"));
+        if (frontendUrl != null && !frontendUrl.isBlank()) origins.add(frontendUrl);
+        configuration.setAllowedOriginPatterns(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

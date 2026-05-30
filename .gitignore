@@ -3,4 +3,4 @@ dist/
 .DS_Store
 rentmate-backend/target/
 rentmate-frontend/.env
-rentmate-backend/src/main/resources/application.properties
+# application.properties uses only env vars — safe to commit

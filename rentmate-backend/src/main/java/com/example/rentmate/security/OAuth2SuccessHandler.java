@@ -27,7 +27,12 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
     @Autowired
     private UserRepository userRepository;
 
-    private static final String FRONTEND_CALLBACK = "http://localhost:5173/oauth2/callback";
+    @org.springframework.beans.factory.annotation.Value("${FRONTEND_URL:http://localhost:5173}")
+    private String frontendUrl;
+
+    private String getFrontendCallback() {
+        return frontendUrl + "/oauth2/callback";
+    }
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request,
@@ -39,7 +44,7 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
         String name  = oauth2User.getAttribute("name");
 
         if (email == null) {
-            response.sendRedirect(FRONTEND_CALLBACK + "?error=no_email");
+            response.sendRedirect(getFrontendCallback() + "?error=no_email");
             return;
         }
 
@@ -56,7 +61,7 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
         String token  = jwtUtil.generateToken(user.getEmail());
         String userId = String.valueOf(user.getId());
 
-        String redirect = FRONTEND_CALLBACK
+        String redirect = getFrontendCallback()
             + "?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8)
             + "&userId=" + URLEncoder.encode(userId, StandardCharsets.UTF_8)
             + "&name="   + URLEncoder.encode(user.getName() != null ? user.getName() : "", StandardCharsets.UTF_8);
